@@ -1,0 +1,354 @@
+Bước 1: Tạo thư mục
+Mở Terminal:
+mkdir -p ~/lab5
+cd ~/lab5
+Kiểm tra:
+pwd
+Bước 2: Tạo file
+xed bai1.c &
+Bước 3: Dán toàn bộ code
+#include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <semaphore.h>
+
+int products = 0;
+int sells = 0;
+
+// Thay 35 bằng (2 số cuối MSSV + 10)
+#define LIMIT 35
+
+sem_t empty;
+sem_t full;
+
+void *producer(void *arg)
+{
+    while(1)
+    {
+        sem_wait(&empty);
+
+        products++;
+
+        printf("San xuat: products = %d, sells = %d\n", products, sells);
+
+        sem_post(&full);
+
+        sleep(1);
+    }
+}
+
+void *consumer(void *arg)
+{
+    while(1)
+    {
+        sem_wait(&full);
+
+        sells++;
+
+        printf("Ban hang: products = %d, sells = %d\n", products, sells);
+
+        sem_post(&empty);
+
+        sleep(2);
+    }
+}
+
+int main()
+{
+    pthread_t t1, t2;
+
+    sem_init(&empty, 0, LIMIT);
+    sem_init(&full, 0, 0);
+
+    pthread_create(&t1, NULL, producer, NULL);
+    pthread_create(&t2, NULL, consumer, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    sem_destroy(&empty);
+    sem_destroy(&full);
+
+    return 0;
+}
+Bước 4: Lưu
+Nhấn:
+Ctrl + S
+Đóng cửa sổ xed.
+Bước 5: Biên dịch
+Trong Terminal:
+gcc bai1.c -o bai1 -lpthread -lrt
+Nếu không có lỗi sẽ hiện lại dấu nhắc:
+mint@mint:~/lab5$
+Bước 6: Chạy
+./bai1
+Ví dụ kết quả:
+San xuat: products = 1, sells = 0
+San xuat: products = 2, sells = 0
+Ban hang: products = 2, sells = 1
+San xuat: products = 3, sells = 1
+Ban hang: products = 3, sells = 2
+...
+Dừng chương trình bằng:
+Ctrl + C
+Giải thích code
+Khai báo biến
+int products = 0;
+int sells = 0;
+products: số sản phẩm đã sản xuất. 
+sells: số sản phẩm đã bán. 
+Semaphore
+sem_t empty;
+sem_t full;
+empty: số chỗ còn trống để sản xuất. 
+full: số sản phẩm đã có để bán. 
+Khởi tạo
+sem_init(&empty,0,LIMIT);
+sem_init(&full,0,0);
+Ban đầu:
+Có LIMIT chỗ trống. 
+Chưa có sản phẩm nào. 
+Producer
+sem_wait(&empty);
+Nếu đã sản xuất đủ LIMIT sản phẩm chưa bán thì Producer sẽ phải chờ.
+Sau đó:
+products++;
+và:
+sem_post(&full);
+Báo cho Consumer biết đã có thêm một sản phẩm.
+Consumer
+sem_wait(&full);
+Nếu chưa có sản phẩm thì Consumer sẽ phải chờ.
+Sau đó:
+sells++;
+rồi:
+sem_post(&empty);
+Thông báo đã có thêm một chỗ trống để Producer tiếp tục sản xuất.
+
+BÀI 2 - Đồng bộ mảng bằng Semaphore
+Theo đề bài, có 2 thread chạy song song: 
+Thread 1: sinh số ngẫu nhiên và thêm vào mảng a. 
+Thread 2: lấy một phần tử ra khỏi mảng. 
+Ban đầu chạy không đồng bộ để thấy lỗi, sau đó dùng semaphore để đồng bộ. 
+Bước 1: Tạo file
+cd ~/lab5
+xed bai2.c &
+Bước 2: Viết code
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <semaphore.h>
+#include <time.h>
+
+int a[100];
+int n = 0;
+
+sem_t mutex;
+
+void *them(void *arg)
+{
+    while(1)
+    {
+        sem_wait(&mutex);
+
+        if(n < 100)
+        {
+            int x = rand() % 100;
+            a[n] = x;
+            n++;
+
+            printf("Them %d   So phan tu = %d\n", x, n);
+        }
+
+        sem_post(&mutex);
+
+        sleep(1);
+    }
+}
+
+void *xoa(void *arg)
+{
+    while(1)
+    {
+        sem_wait(&mutex);
+
+        if(n == 0)
+        {
+            printf("Nothing in array a\n");
+        }
+        else
+        {
+            printf("Lay %d   So phan tu = %d\n", a[n-1], n-1);
+            n--;
+        }
+
+        sem_post(&mutex);
+
+        sleep(2);
+    }
+}
+
+int main()
+{
+    srand(time(NULL));
+
+    pthread_t t1, t2;
+
+    sem_init(&mutex,0,1);
+
+    pthread_create(&t1,NULL,them,NULL);
+    pthread_create(&t2,NULL,xoa,NULL);
+
+    pthread_join(t1,NULL);
+    pthread_join(t2,NULL);
+
+    sem_destroy(&mutex);
+
+    return 0;
+}
+Bước 3: Lưu
+Ctrl + S
+Đóng xed.
+Bước 4: Biên dịch
+gcc bai2.c -o bai2 -lpthread -lrt
+Nếu không có lỗi sẽ quay lại dấu nhắc lệnh.
+Bước 5: Chạy
+./bai2
+Dừng chương trình:
+Ctrl + C
+BÀI 3 - Race Condition
+Đề bài cho 2 process (có thể mô phỏng bằng 2 thread) cùng thay đổi biến x mà không đồng bộ, để quan sát lỗi tranh chấp dữ liệu. 
+Bước 1
+xed bai3.c &
+Bước 2
+#include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
+
+int x = 0;
+
+void *processA(void *arg)
+{
+    while(1)
+    {
+        x++;
+
+        if(x==20)
+            x=0;
+
+        printf("A: %d\n",x);
+
+        usleep(200000);
+    }
+}
+
+void *processB(void *arg)
+{
+    while(1)
+    {
+        x++;
+
+        if(x==20)
+            x=0;
+
+        printf("B: %d\n",x);
+
+        usleep(200000);
+    }
+}
+
+int main()
+{
+    pthread_t t1,t2;
+
+    pthread_create(&t1,NULL,processA,NULL);
+    pthread_create(&t2,NULL,processB,NULL);
+
+    pthread_join(t1,NULL);
+    pthread_join(t2,NULL);
+
+    return 0;
+}
+Biên dịch
+gcc bai3.c -o bai3 -lpthread
+Chạy
+./bai3
+Nhận xét
+Bạn sẽ thấy số có thể bị lặp, nhảy hoặc không theo thứ tự vì hai thread cùng sửa biến x mà không có cơ chế bảo vệ. Đây chính là Race Condition.
+BÀI 4 - Dùng Mutex sửa lỗi
+Yêu cầu là dùng Mutex để bảo vệ việc cập nhật biến x. 
+Bước 1
+xed bai4.c &
+Bước 2
+#include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
+
+int x = 0;
+
+pthread_mutex_t mutex;
+
+void *processA(void *arg)
+{
+    while(1)
+    {
+        pthread_mutex_lock(&mutex);
+
+        x++;
+
+        if(x==20)
+            x=0;
+
+        printf("A: %d\n",x);
+
+        pthread_mutex_unlock(&mutex);
+
+        usleep(200000);
+    }
+}
+
+void *processB(void *arg)
+{
+    while(1)
+    {
+        pthread_mutex_lock(&mutex);
+
+        x++;
+
+        if(x==20)
+            x=0;
+
+        printf("B: %d\n",x);
+
+        pthread_mutex_unlock(&mutex);
+
+        usleep(200000);
+    }
+}
+
+int main()
+{
+    pthread_t t1,t2;
+
+    pthread_mutex_init(&mutex,NULL);
+
+    pthread_create(&t1,NULL,processA,NULL);
+    pthread_create(&t2,NULL,processB,NULL);
+
+    pthread_join(t1,NULL);
+    pthread_join(t2,NULL);
+
+    pthread_mutex_destroy(&mutex);
+
+    return 0;
+}
+
+Biên dịch
+gcc bai4.c -o bai4 -lpthread
+Chạy
+./bai4
+Kết quả
+Giá trị của x vẫn tăng từ 0 đến 19 rồi quay về 0. 
+Không còn hai thread cùng sửa x tại một thời điểm, nên kết quả ổn định và hợp lý hơn so với Bài 3.
+
